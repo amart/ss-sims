@@ -3,9 +3,9 @@
 # https://creativecommons.org/licenses/by-nc-sa/4.0/
 # 
 # Run SS simulations
-# ZTA, initial version 2014-10-13
+# ZTA, 2014-10-13
 # R version 3.1.1, 32-bit
-#
+
 
 devtools::install_github("amart/r4ss")
 library(r4ss)
@@ -21,17 +21,17 @@ seas <- 1
 index_fleet <- 4
 
 
-source_dir  <- "F:\\Folder\\w\\dev\\SS sims\\R"
+source_dir  <- "\\home\\w\\dev\\SS sims\\R"
 
-working_dir <- "F:\\Folder\\w\\dev\\SS sims\\run"
+working_dir <- "\\home\\w\\dev\\SS sims\\run"
 
 
 ss_exe_file <- "ss3.exe"
 
 starter_file <- "starter.ss"
 forecast_file <- "forecast.ss"
-dat_file <- "2011_sablefish_data.ss"
-ctl_file <- "2011_sablefish_control.ss"
+dat_file <- "DAT.ss"
+ctl_file <- "CTL.ss"
 
 idx_file <- "indices.csv"
 
@@ -59,7 +59,20 @@ if (nrows_data < 1 || num_indices < 1)
 num_proj <- min(min(99,num_proj_years),nrows_data)
 
 
-source(paste(source_dir,"\\sim_functions.r",sep=""))
+
+
+
+copy_sim_files_into_dir <- function(copy_to_dir)
+{
+    file.copy(ss_exe_file,copy_to_dir,copy.mode=TRUE,copy.date=TRUE)
+    file.copy(starter_file,copy_to_dir,copy.mode=TRUE,copy.date=TRUE)
+    file.copy(forecast_file,copy_to_dir,copy.mode=TRUE,copy.date=TRUE)
+    file.copy(dat_file,copy_to_dir,copy.mode=TRUE,copy.date=TRUE)
+    file.copy(ctl_file,copy_to_dir,copy.mode=TRUE,copy.date=TRUE)
+}
+
+
+
 
 
 dat_struct <- SS_readdat(dat_file)
@@ -89,8 +102,7 @@ setwd(working_dir)
 # base_run <- SS_output(base_dir,forecast=TRUE,verbose=FALSE,printstats=FALSE,hidewarn=TRUE)
 
 # get the forecasted catch by fleet
-base_fc_file    <- file.path(base_dir,"Forecast-report.sso")
-base_catch_proj <- get_forecast_catch_by_fleet(base_fc_file,dat_struct$Nfleet,dat_struct$nseas,fc_struct$Nforecastyrs)
+base_catch_proj <- sim_get_forecast_catch_by_fleet(base_dir,dat_struct$Nfleet,dat_struct$nseas,fc_struct$Nforecastyrs)
 
 # get the projected catch total and catch fraction
 if (!is.null(base_catch_proj))
@@ -99,7 +111,7 @@ if (!is.null(base_catch_proj))
     base_catch_frac <- base_catch_proj / sum(base_catch_proj)
 } else {
     base_catch_tot  <- 0.0
-    base_catch_frac <- rep(0.0,dat_struct$Nfleet)
+    base_catch_frac <- matrix(0.0,nrow=dat_struct$nseas,ncol=dat_struct$Nfleet)
     print("Warning:  bad forecasted catch in base run")
 }
 
@@ -129,8 +141,7 @@ for (i in 1:num_indices)
             prev_dir <- new_dir
 
             # get catch by fleet from previous year's Forecast-report.sso file
-            fc_file    <- file.path(prev_dir,"Forecast-report.sso")
-            catch_proj <- get_forecast_catch_by_fleet(fc_file,dat_struct$Nfleet,dat_struct$nseas,fc_struct$Nforecastyrs)
+            catch_proj <- sim_get_forecast_catch_by_fleet(prev_dir,dat_struct$Nfleet,dat_struct$nseas,fc_struct$Nforecastyrs)
 
             if (!is.null(catch_proj))
             {
@@ -138,7 +149,7 @@ for (i in 1:num_indices)
                 catch_frac <- catch_proj / sum(catch_proj)
             } else {
                 catch_tot  <- 0.0
-                catch_frac <- rep(0.0,dat_struct$Nfleet)
+                catch_frac <- matrix(0.0,nrow=dat_struct$nseas,ncol=dat_struct$Nfleet)
                 print(paste("Warning:  bad forecasted catch in index ",i," run ",(j-1),sep=""))
             }
         }
@@ -161,8 +172,8 @@ for (i in 1:num_indices)
         new_dat_struct <- sim_set_endyr(new_dat_struct,catch_year)
 
         # calculate fraction of total annual catch for each fleet and add to catch
-        catch_vec <- catch_tot * catch_frac
-        new_dat_struct <- sim_add_catch(new_dat_struct,catch_vec,seas,catch_year)
+        catch_mat <- catch_tot * catch_frac
+        new_dat_struct <- sim_add_catch(new_dat_struct,catch_mat,catch_year)
 
         # add index for endyr to CPUE
         idx_yr <- which(index_data$Year == new_dat_struct$endyr,arr.ind=TRUE)
