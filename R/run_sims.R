@@ -258,6 +258,7 @@ do_projections_for_index <- function(index_num=-1)
             lencomp_struct <- sim_map_pop_len_to_data_len(new_dat_struct,lencomp_struct)
             if (!is.null(lencomp_struct))
             {
+                lencomp_struct <- lencomp_struct / sum(lencomp_struct)
                 new_dat_struct <- sim_add_length_comp(new_dat_struct,catch_year,proj_seas,proj_fleet,proj_fleet_len_comp_N,lencomp_struct)
             }
 
@@ -266,6 +267,7 @@ do_projections_for_index <- function(index_num=-1)
             agecomp_struct <- sim_map_pop_age_to_data_age(new_dat_struct,agecomp_struct)
             if (!is.null(agecomp_struct))
             {
+                agecomp_struct <- agecomp_struct / sum(agecomp_struct)
                 new_dat_struct <- sim_add_age_comp(new_dat_struct,catch_year,proj_seas,proj_fleet,proj_fleet_age_comp_N,agecomp_struct)
             }
 
