@@ -1,10 +1,23 @@
-# Creative Commons License
-# Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
-# https://creativecommons.org/licenses/by-nc-sa/4.0/
-# 
 # Run SS simulations
 # ZTA, 2014-10-13
 # R version 3.1.1, 32-bit
+
+# at some point, there will be a function to parse the starter.ss file to determine the names
+# of the DAT and CTL files.  for now it will input the directory, the names of the DAT and CTL files,
+# the file with the environmental indices, and the number of years to project forward
+#
+
+# what is already installed?
+installed.local <- library()$results[,"Package"]
+
+# install what is missing
+needed.local <- c("foreach","doParallel","Hmisc","stringr")
+needed.installed <- needed.local %in% installed.local
+needed.remaining <- needed.local[!needed.installed]
+if (length(needed.remaining) > 0)
+{
+    install.packages(needed.remaining)
+}
 
 
 devtools::install_github("amart/r4ss")
@@ -18,20 +31,23 @@ library(stringr)
 
 
 # NOTE:  these variables are set for testing purposes
-num_proj_years <-10
-std_err <- 0.95
-seas <- 1
+num_proj_years <- 10
+
+index_seas <- 1
 index_fleet <- 4
 
+proj_seas <- 1
+proj_fleet <- 8
+proj_fleet_name <- "BLAR"
+
+
+working_dir <- "\\home\\w\\dev\\SS sims\\run"
 
 
 # ~~~~~~~~~~~ variables set for specific simulations ~~~~~~~~~~~
 
 # num of CPUs for projections running in parallel
 num_cpus <- 4
-
-
-working_dir <- "\\home\\w\\dev\\SS sims\\run"
 
 
 ss_exe_file <- "ss3.exe"
@@ -42,12 +58,15 @@ dat_file <- "DAT.ss"
 ctl_file <- "CTL.ss"
 
 idx_file <- "indices.csv"
+idx_std_err_file <- "indices.std_err.csv"
 
 
 
 setwd(working_dir)
 
 
+
+# read in and check index file
 index_data <- read.csv(idx_file,header=TRUE,numerals="no.loss")
 dim(index_data)
 
@@ -59,8 +78,20 @@ index_names <- names(index_data)[-1]
 if (nrows_data < 1 || num_indices < 1)
 {
     cat("Error with index file\n")
-    return(1)
+    return(-1)
 }
+
+
+# read in and check index std err file
+index_std_err <- read.csv(idx_std_err_file,header=TRUE,numerals="no.loss")
+dim(index_std_err)
+
+if (dim(index_std_err)[1] != nrows_data || (dim(index_std_err)[2] - 1) != num_indices)
+{
+    cat("Error with index std err file\n")
+    return(-1)
+}
+
 
 
 # number of projections for each index; limited to max of 99
@@ -106,7 +137,8 @@ system(paste(ss_exe_file,"-nox",sep=" "),intern=FALSE,ignore.stderr=TRUE,wait=TR
 
 setwd(working_dir)
 
-# base_run <- SS_output(base_dir,forecast=TRUE,verbose=FALSE,printstats=FALSE,hidewarn=TRUE)
+# get the results of the base run
+base_rep_struct <- SS_output(base_dir,forecast=TRUE,verbose=FALSE,printstats=FALSE,hidewarn=TRUE)
 
 # get the forecasted catch by fleet
 base_catch_proj <- sim_get_forecast_catch_by_fleet(base_dir,dat_struct$Nfleet,dat_struct$nseas,fc_struct$Nforecastyrs)
@@ -121,6 +153,16 @@ if (!is.null(base_catch_proj))
     base_catch_frac <- matrix(0.0,nrow=dat_struct$nseas,ncol=dat_struct$Nfleet)
     cat("\nWarning:  bad forecasted catch in base run\n\n")
 }
+
+
+
+# get the mean index std err, length, and age sample sizes for proj_fleet (fleet 8, survey NWCBO)
+proj_fleet_std_err    <- max(0.01,mean(dat_struct$CPUE[which(dat_struct$CPUE$index == proj_fleet,arr.ind=TRUE),]$se_log))
+
+proj_fleet_len_comp_N <- max(100,floor(mean(dat_struct$lencomp[which(dat_struct$lencomp$FltSvy == proj_fleet,arr.ind=TRUE),]$Nsamp)))
+
+proj_fleet_age_comp_N <- max(50,floor(mean(dat_struct$agecomp[which(dat_struct$agecomp$FltSvy == proj_fleet,arr.ind=TRUE),]$Nsamp)))
+
 
 
 
@@ -148,6 +190,8 @@ do_projections_for_index <- function(index_num=-1)
         catch_tot  <- base_catch_tot
         catch_frac <- base_catch_frac
 
+        prev_rep_struct <- base_rep_struct
+
         for (j in 1:num_proj_years)
         {
             setwd(working_dir)
@@ -156,6 +200,9 @@ do_projections_for_index <- function(index_num=-1)
             {
                 # save the previous directory if this is not the first run for this index
                 prev_dir <- new_dir
+
+                # get the results from the previous run
+                prev_rep_struct <- SS_output(prev_dir,forecast=TRUE,verbose=FALSE,printstats=FALSE,hidewarn=TRUE)
 
                 # get catch by fleet from previous year's Forecast-report.sso file
                 catch_proj <- sim_get_forecast_catch_by_fleet(prev_dir,dat_struct$Nfleet,dat_struct$nseas,fc_struct$Nforecastyrs)
@@ -185,39 +232,66 @@ do_projections_for_index <- function(index_num=-1)
             catch_year <- catch_year + 1
 
 
-            # edit the DAT file
+            # &&&&&&&&&&&&&&&&& edit the DAT file &&&&&&&&&&&&&&&&&
             new_dat_struct <- sim_set_endyr(new_dat_struct,catch_year)
 
             # calculate fraction of total annual catch for each fleet and add to catch
             catch_mat <- catch_tot * catch_frac
             new_dat_struct <- sim_add_catch(new_dat_struct,catch_mat,catch_year)
 
-            # add index for endyr to CPUE
+            # add env index for endyr to CPUE
             idx_yr <- which(index_data$Year == new_dat_struct$endyr,arr.ind=TRUE)
             if (idx_yr > 0)
             {
-                new_dat_struct <- sim_add_index_as_CPUE(new_dat_struct,catch_year,seas,index_fleet,index_data[idx_yr,(index_num+1)],std_err)
+                new_dat_struct <- sim_add_index_as_CPUE(new_dat_struct,catch_year,index_seas,index_fleet,index_data[idx_yr,(index_num+1)],index_std_err[idx_yr,(index_num+1)])
             }
 
+            # add generated srv index for endyr to CPUE for proj_fleet
+            cpue_struct <- sim_generate_CPUE(new_dat_struct,prev_rep_struct,catch_year,proj_seas,proj_fleet,apply_error=FALSE)
+            if (cpue_struct$obs > 0.0)
+            {
+                new_dat_struct <- sim_add_CPUE(new_dat_struct,catch_year,proj_seas,proj_fleet,cpue_struct$obs,proj_fleet_std_err)
+            }
+
+            # add generated srv length comps for endyr to lencomp for proj_fleet
+            lencomp_struct <- sim_generate_length_comp(new_dat_struct,prev_rep_struct,catch_year,proj_seas,proj_fleet,apply_error=FALSE)
+            lencomp_struct <- sim_map_pop_len_to_data_len(new_dat_struct,lencomp_struct)
+            if (!is.null(lencomp_struct))
+            {
+                new_dat_struct <- sim_add_length_comp(new_dat_struct,catch_year,proj_seas,proj_fleet,proj_fleet_len_comp_N,lencomp_struct)
+            }
+
+            # add generated srv age comps for endyr to agecomp for proj_fleet
+            agecomp_struct <- sim_generate_age_comp(new_dat_struct,prev_rep_struct,catch_year,proj_seas,proj_fleet,apply_error=FALSE)
+            agecomp_struct <- sim_map_pop_age_to_data_age(new_dat_struct,agecomp_struct)
+            if (!is.null(agecomp_struct))
+            {
+                new_dat_struct <- sim_add_age_comp(new_dat_struct,catch_year,proj_seas,proj_fleet,proj_fleet_age_comp_N,agecomp_struct)
+            }
+
+            # ----------------- write the new DAT file -----------------
             SS_writedat(new_dat_struct,dat_file,overwrite=TRUE,verbose=TRUE)
 
 
-            # edit the forecast file
+            # &&&&&&&&&&&&&&&&& edit the forecast file &&&&&&&&&&&&&&&&&
             new_fc_struct$FirstYear_for_caps_and_allocations <- catch_year + 1
 
+            # ----------------- write the new forecast file -----------------
             SS_writeforecast(new_fc_struct,file=forecast_file,overwrite=TRUE,verbose=TRUE)
 
 
-            # edit the CTL file
+            # &&&&&&&&&&&&&&&&& edit the CTL file &&&&&&&&&&&&&&&&&
             # change catch_year to catch_year+1 in bias adjustment section
             new_ctl_struct <- sedit(new_ctl_struct,as.character(catch_year),as.character(catch_year+1))
 
             # change curr_year to curr_year+1 in bias adjustment section
             new_ctl_struct <- sedit(new_ctl_struct,as.character(curr_year),as.character(catch_year))
 
+            # ----------------- write the new CTL file -----------------
             writeLines(new_ctl_struct,ctl_file)
 
 
+            # run it
             system(paste(ss_exe_file,"-nox",sep=" "),intern=FALSE,ignore.stderr=TRUE,wait=TRUE,
                    input=NULL,show.output.on.console=FALSE,minimized=FALSE,invisible=FALSE)
 
@@ -263,4 +337,3 @@ setwd(working_dir)
 # check output
 # new_run <- SS_output(new_dir,forecast=TRUE,verbose=FALSE,printstats=FALSE,hidewarn=TRUE)
 # SS_plots(new_run)
-
