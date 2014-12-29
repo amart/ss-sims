@@ -33,12 +33,14 @@ library(stringr)
 # NOTE:  these variables are set for testing purposes
 num_proj_years <- 10
 
+
 index_seas <- 1
 index_fleet <- 4
 
-proj_seas <- 1
-proj_fleet <- 8
-proj_fleet_name <- "BLAR"
+
+num_proj_fleets <- 4
+proj_seas <- c(1,1,1,1)
+proj_fleet <- c(1,2,3,8)
 
 
 working_dir <- "\\home\\w\\dev\\SS sims\\run"
@@ -156,12 +158,22 @@ if (!is.null(base_catch_proj))
 
 
 
-# get the mean index std err, length, and age sample sizes for proj_fleet (fleet 8, survey NWCBO)
-proj_fleet_std_err    <- max(0.01,mean(dat_struct$CPUE[which(dat_struct$CPUE$index == proj_fleet,arr.ind=TRUE),]$se_log))
 
-proj_fleet_len_comp_N <- max(100,floor(mean(dat_struct$lencomp[which(dat_struct$lencomp$FltSvy == proj_fleet,arr.ind=TRUE),]$Nsamp)))
+# get the mean index std err, length, and age sample sizes for the projected fleets
+proj_fleet_std_err    <- rep(0.0,num_proj_fleets)
+proj_fleet_len_comp_N <- rep(0.0,num_proj_fleets)
+proj_fleet_age_comp_N <- rep(0.0,num_proj_fleets)
 
-proj_fleet_age_comp_N <- max(50,floor(mean(dat_struct$agecomp[which(dat_struct$agecomp$FltSvy == proj_fleet,arr.ind=TRUE),]$Nsamp)))
+for (f in 1:num_proj_fleets)
+{
+    proj_fl <- proj_fleet[f]
+
+    proj_fleet_std_err[f]    <- max(0.01,mean(dat_struct$CPUE[which(dat_struct$CPUE$index == proj_fl,arr.ind=TRUE),]$se_log))
+
+    proj_fleet_len_comp_N[f] <- max(100,floor(mean(dat_struct$lencomp[which(dat_struct$lencomp$FltSvy == proj_fl,arr.ind=TRUE),]$Nsamp)))
+
+    proj_fleet_age_comp_N[f] <- max(50,floor(mean(dat_struct$agecomp[which(dat_struct$agecomp$FltSvy == proj_fl,arr.ind=TRUE),]$Nsamp)))
+}
 
 
 
@@ -246,29 +258,40 @@ do_projections_for_index <- function(index_num=-1)
                 new_dat_struct <- sim_add_index_as_CPUE(new_dat_struct,catch_year,index_seas,index_fleet,index_data[idx_yr,(index_num+1)],index_std_err[idx_yr,(index_num+1)])
             }
 
-            # add generated srv index for endyr to CPUE for proj_fleet
-            cpue_struct <- sim_generate_CPUE(new_dat_struct,prev_rep_struct,catch_year,proj_seas,proj_fleet,apply_error=FALSE)
-            if (cpue_struct$obs > 0.0)
+            # generate "data" for the projected fleets
+            for (f in 1:num_proj_fleets)
             {
-                new_dat_struct <- sim_add_CPUE(new_dat_struct,catch_year,proj_seas,proj_fleet,cpue_struct$obs,proj_fleet_std_err)
-            }
+                proj_fl <- proj_fleet[f]
+                proj_ss <- proj_seas[f]
+                proj_se <- proj_fleet_std_err[f]
 
-            # add generated srv length comps for endyr to lencomp for proj_fleet
-            lencomp_struct <- sim_generate_length_comp(new_dat_struct,prev_rep_struct,catch_year,proj_seas,proj_fleet,apply_error=FALSE)
-            lencomp_struct <- sim_map_pop_len_to_data_len(new_dat_struct,lencomp_struct)
-            if (!is.null(lencomp_struct))
-            {
-                lencomp_struct <- lencomp_struct / sum(lencomp_struct)
-                new_dat_struct <- sim_add_length_comp(new_dat_struct,catch_year,proj_seas,proj_fleet,proj_fleet_len_comp_N,lencomp_struct)
-            }
+                # add generated srv index for endyr to CPUE for proj_fleet
+                if (is.numeric(proj_se) && !is.na(proj_se))
+                {
+                    cpue_struct <- sim_generate_CPUE(new_dat_struct,prev_rep_struct,catch_year,proj_ss,proj_fl,apply_error=FALSE)
+                    if (proj_se > 0.0 && cpue_struct$obs > 0.0)
+                    {
+                        new_dat_struct <- sim_add_CPUE(new_dat_struct,catch_year,proj_ss,proj_fl,cpue_struct$obs,proj_se)
+                    }
+                }
 
-            # add generated srv age comps for endyr to agecomp for proj_fleet
-            agecomp_struct <- sim_generate_age_comp(new_dat_struct,prev_rep_struct,catch_year,proj_seas,proj_fleet,apply_error=FALSE)
-            agecomp_struct <- sim_map_pop_age_to_data_age(new_dat_struct,agecomp_struct)
-            if (!is.null(agecomp_struct))
-            {
-                agecomp_struct <- agecomp_struct / sum(agecomp_struct)
-                new_dat_struct <- sim_add_age_comp(new_dat_struct,catch_year,proj_seas,proj_fleet,proj_fleet_age_comp_N,agecomp_struct)
+                add generated srv length comps for endyr to lencomp for proj_fleet
+                lencomp_struct <- sim_generate_length_comp(new_dat_struct,prev_rep_struct,catch_year,proj_ss,proj_fl,apply_error=TRUE)
+                lencomp_struct <- sim_map_pop_len_to_data_len(new_dat_struct,lencomp_struct)
+                if (!is.null(lencomp_struct))
+                {
+                    lencomp_struct <- lencomp_struct / sum(lencomp_struct)
+                    new_dat_struct <- sim_add_length_comp(new_dat_struct,catch_year,proj_ss,proj_fl,proj_fleet_len_comp_N[f],lencomp_struct)
+                }
+
+                # add generated srv age comps for endyr to agecomp for proj_fleet
+                agecomp_struct <- sim_generate_age_comp(new_dat_struct,prev_rep_struct,catch_year,proj_ss,proj_fl,apply_error=TRUE)
+                agecomp_struct <- sim_map_pop_age_to_data_age(new_dat_struct,agecomp_struct)
+                if (!is.null(agecomp_struct))
+                {
+                    agecomp_struct <- agecomp_struct / sum(agecomp_struct)
+                    new_dat_struct <- sim_add_age_comp(new_dat_struct,catch_year,proj_ss,proj_fl,proj_fleet_age_comp_N[f],agecomp_struct)
+                }
             }
 
             # ----------------- write the new DAT file -----------------
@@ -322,7 +345,7 @@ setwd(working_dir)
 
 
 # ~~~~~~~~~~~ main loop for projections ~~~~~~~~~~~
-foreach (i = 1:num_indices,.export=c("index_names","num_indices","working_dir","dat_struct","ctl_struct","fc_struct","base_catch_tot","base_catch_frac")) %dopar% do_projections_for_index(i)
+foreach (i = 1:num_indices,.export=c("index_names","index_seas","index_fleet","num_indices","index_data","index_std_err","num_proj_years","working_dir","dat_struct","ctl_struct","fc_struct","base_catch_tot","base_catch_frac","base_rep_struct","num_proj_fleets","proj_seas","proj_fleet","proj_fleet_name","proj_fleet_std_err","proj_fleet_len_comp_N","proj_fleet_age_comp_N")) %dopar% do_projections_for_index(i)
 
 
 
