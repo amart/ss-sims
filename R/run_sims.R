@@ -66,8 +66,8 @@ ss_exe_file <- "ss3.exe"
 starter_file <- "starter.ss"
 starter_calc_only_file <- paste(starter_file,".for_proj",sep="")
 forecast_file <- "forecast.ss"
-dat_file <- "2011_sablefish_data.ss"
-ctl_file <- "2011_sablefish_control.ss"
+dat_file <- "DAT.ss"
+ctl_file <- "CTL.ss"
 est_dat_file <- "data.ss_new"
 
 par_file <- "ss3.par"
@@ -476,8 +476,7 @@ do_projections_for_index <- function(index_num=-1)
                 proj_ss <- proj_fleet_seas[f]
 
                 # add generated length comps for endyr to lencomp for proj_fleet
-                lencomp_struct <- sim_generate_length_comp(new_dat_struct,calc_only_rep_struct,catch_year,proj_ss,proj_fl,apply_error=TRUE)
-                lencomp_struct <- sim_map_pop_len_to_data_len(new_dat_struct,lencomp_struct)
+                lencomp_struct <- sim_generate_length_comp_from_expected(calc_only_dat_struct,calc_only_rep_struct,catch_year,proj_ss,proj_fl,apply_error=TRUE)
                 if (!is.null(lencomp_struct))
                 {
                     lencomp_struct <- lencomp_struct / sum(lencomp_struct)
