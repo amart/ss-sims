@@ -217,11 +217,11 @@ for (f in 1:num_proj_fleets)
 {
     proj_fl <- proj_fleet[f]
 
-    proj_fleet_cpue_std_err[f] <- max(0.01,mean(dat_struct$CPUE[which(dat_struct$CPUE$index == proj_fl,arr.ind=TRUE),]$se_log))
+    proj_fleet_cpue_std_err[f] <- max(0.001,mean(dat_struct$CPUE[which(dat_struct$CPUE$index == proj_fl,arr.ind=TRUE),]$se_log))
 
-    proj_fleet_len_comp_N[f]   <- min(400,max(100,floor(mean(dat_struct$lencomp[which(dat_struct$lencomp$FltSvy == proj_fl,arr.ind=TRUE),]$Nsamp))))
+    proj_fleet_len_comp_N[f]   <- min(400,max(10,floor(mean(dat_struct$lencomp[which(dat_struct$lencomp$FltSvy == proj_fl,arr.ind=TRUE),]$Nsamp))))
 
-    proj_fleet_age_comp_N[f]   <- min(400,max(50,floor(mean(dat_struct$agecomp[which(dat_struct$agecomp$FltSvy == proj_fl,arr.ind=TRUE),]$Nsamp))))
+    proj_fleet_age_comp_N[f]   <- min(400,max(10,floor(mean(dat_struct$agecomp[which(dat_struct$agecomp$FltSvy == proj_fl,arr.ind=TRUE),]$Nsamp))))
 
     if (dat_struct$N_discard_fleets > 0 && f %in% dat_struct$discard_fleet_info$Fleet)
     {
@@ -364,15 +364,6 @@ do_projections_for_index <- function(index_num=-1)
                     }
                 }
 
-                # add generated srv age comps for endyr to agecomp for proj_fleet
-                agecomp_struct <- sim_generate_age_comp(new_dat_struct,prev_rep_struct,catch_year,proj_ss,proj_fl,apply_error=TRUE)
-                agecomp_struct <- sim_map_pop_age_to_data_age(new_dat_struct,agecomp_struct)
-                if (!is.null(agecomp_struct))
-                {
-                    agecomp_struct <- agecomp_struct / sum(agecomp_struct)
-                    new_dat_struct <- sim_add_age_comp(new_dat_struct,catch_year,proj_ss,proj_fl,proj_fleet_age_comp_N[f],proj_fleet_age_comp_gender[f],proj_fleet_age_comp_part[f],agecomp_struct)
-                }
-
                 # add average of historical values for discard for proj_fleet
                 if (new_dat_struct$N_discard_fleets > 0 && f %in% new_dat_struct$discard_fleet_info$Fleet)
                 {
@@ -380,14 +371,22 @@ do_projections_for_index <- function(index_num=-1)
                 }
             }
 
-            # save the DAT file struct; without the length comp data, it is the same for the calc-only run and the main run
+            # save the DAT file struct; without the length and age comp data, it is the same for the calc-only run and the main run
             save_new_dat_struct <- new_dat_struct
 
-            # generate dummy length comp "data" for the projected fleets
+            # generate dummy length and age comp "data" for the projected fleets
             for (f in 1:num_proj_fleets)
             {
                 proj_fl <- proj_fleet[f]
                 proj_ss <- proj_fleet_seas[f]
+
+                # add generated srv age comps for endyr to agecomp for proj_fleet
+                agecomp_struct <- sim_generate_age_comp(new_dat_struct,prev_rep_struct,catch_year,proj_ss,proj_fl,apply_error=FALSE)
+                agecomp_struct <- sim_map_pop_age_to_data_age(new_dat_struct,agecomp_struct)
+                if (!is.null(agecomp_struct))
+                {
+                    new_dat_struct <- sim_add_age_comp(new_dat_struct,catch_year,proj_ss,proj_fl,1,proj_fleet_age_comp_gender[f],proj_fleet_age_comp_part[f],agecomp_struct)
+                }
 
                 # add generated length comps for endyr to lencomp for proj_fleet
                 lencomp_struct <- sim_generate_length_comp(new_dat_struct,prev_rep_struct,catch_year,proj_ss,proj_fl,apply_error=FALSE)
@@ -395,7 +394,6 @@ do_projections_for_index <- function(index_num=-1)
                 if (!is.null(lencomp_struct))
                 {
                     # these values are placeholder/dummy values; they will NOT be used in model fitting
-                    lencomp_struct <- lencomp_struct / sum(lencomp_struct)
                     new_dat_struct <- sim_add_length_comp(new_dat_struct,catch_year,proj_ss,proj_fl,1,proj_fleet_len_comp_gender[f],proj_fleet_len_comp_part[f],lencomp_struct)
                 }
             }
@@ -475,11 +473,17 @@ do_projections_for_index <- function(index_num=-1)
                 proj_fl <- proj_fleet[f]
                 proj_ss <- proj_fleet_seas[f]
 
+                # add generated age comps for endyr to agecomp for proj_fleet
+                agecomp_struct <- sim_generate_age_comp_from_expected(calc_only_dat_struct,calc_only_rep_struct,catch_year,proj_ss,proj_fl,apply_error=TRUE)
+                if (!is.null(agecomp_struct))
+                {
+                    new_dat_struct <- sim_add_age_comp(new_dat_struct,catch_year,proj_ss,proj_fl,proj_fleet_age_comp_N[f],proj_fleet_age_comp_gender[f],proj_fleet_age_comp_part[f],agecomp_struct)
+                }
+
                 # add generated length comps for endyr to lencomp for proj_fleet
                 lencomp_struct <- sim_generate_length_comp_from_expected(calc_only_dat_struct,calc_only_rep_struct,catch_year,proj_ss,proj_fl,apply_error=TRUE)
                 if (!is.null(lencomp_struct))
                 {
-                    lencomp_struct <- lencomp_struct / sum(lencomp_struct)
                     new_dat_struct <- sim_add_length_comp(new_dat_struct,catch_year,proj_ss,proj_fl,proj_fleet_len_comp_N[f],proj_fleet_len_comp_gender[f],proj_fleet_len_comp_part[f],lencomp_struct)
                 }
             }
