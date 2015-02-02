@@ -374,6 +374,10 @@ do_projections_for_index <- function(index_num=-1)
             # save the DAT file struct; without the length and age comp data, it is the same for the calc-only run and the main run
             save_new_dat_struct <- new_dat_struct
 
+            # number of bins, per sex, to use for *generating* multinomial composition values with the bootstrap function
+            nsamples_age <- sim_calculate_nsamples(new_dat_struct$N_agebins)
+            nsamples_len <- sim_calculate_nsamples(new_dat_struct$N_lbins)
+
             # generate dummy length and age comp "data" for the projected fleets
             for (f in 1:num_proj_fleets)
             {
@@ -385,7 +389,7 @@ do_projections_for_index <- function(index_num=-1)
                 agecomp_struct <- sim_map_pop_age_to_data_age(new_dat_struct,agecomp_struct)
                 if (!is.null(agecomp_struct))
                 {
-                    new_dat_struct <- sim_add_age_comp(new_dat_struct,catch_year,proj_ss,proj_fl,1,proj_fleet_age_comp_gender[f],proj_fleet_age_comp_part[f],agecomp_struct)
+                    new_dat_struct <- sim_add_age_comp(new_dat_struct,catch_year,proj_ss,proj_fl,nsamples_age,proj_fleet_age_comp_gender[f],proj_fleet_age_comp_part[f],agecomp_struct)
                 }
 
                 # add generated length comps for endyr to lencomp for proj_fleet
@@ -394,7 +398,7 @@ do_projections_for_index <- function(index_num=-1)
                 if (!is.null(lencomp_struct))
                 {
                     # these values are placeholder/dummy values; they will NOT be used in model fitting
-                    new_dat_struct <- sim_add_length_comp(new_dat_struct,catch_year,proj_ss,proj_fl,1,proj_fleet_len_comp_gender[f],proj_fleet_len_comp_part[f],lencomp_struct)
+                    new_dat_struct <- sim_add_length_comp(new_dat_struct,catch_year,proj_ss,proj_fl,nsamples_len,proj_fleet_len_comp_gender[f],proj_fleet_len_comp_part[f],lencomp_struct)
                 }
             }
 
