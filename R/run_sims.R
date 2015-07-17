@@ -430,8 +430,26 @@ do_projections_for_index <- function(index_num=-1)
             # on which line are the main rec devs (name recdev1)?
             rec_dev_line <- 1 + grep("# recdev1:",prev_par_struct)
 
-            # add " 0.0" to the main rec devs vector
-            new_par_struct[rec_dev_line] <- paste(prev_par_struct[rec_dev_line]," 0.0",sep="")
+            # get row for current year and env idx fleet from REP index matrix
+            env_idx_row <- subset(subset(prev_rep_struct$cpue,Yr==curr_year),Fleet==index_fleet)
+            if (dim(env_idx_row)[1] == 1)
+            {
+                # replace rec dev for current year with transformed env idx value from REP index matrix
+                calc_q <- env_idx_row$Calc_Q
+                env_idx <- env_idx_row$Obs
+                curr_year_env_rec_dev <- log(env_idx / calc_q)
+
+                # get rec dev string
+                rec_devs <- str_split(str_trim(prev_par_struct[rec_dev_line])," ")
+                
+                # omit the value for the current (last) year
+                new_rec_dev_str <- str_c(rec_devs[[1]][1:(length(rec_devs[[1]])-1)],sep="",collapse=" ")
+                
+                new_par_struct[rec_dev_line] <- paste(new_rec_dev_str,curr_year_env_rec_dev,"0.0",sep=" ")
+            } else {
+                # add " 0.0" to the main rec devs vector as the default
+                new_par_struct[rec_dev_line] <- paste(prev_par_struct[rec_dev_line],"0.0",sep=" ")
+            }
 
             # ----------------- write the new input PAR file -----------------
             writeLines(new_par_struct,par_file)
