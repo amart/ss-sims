@@ -30,6 +30,10 @@ library(Hmisc)
 library(stringr)
 
 
+# for repeatability in generating the rec devs
+set.seed(-99199,kind="default",normal.kind="default")
+
+
 # NOTE:  these variables are set for testing purposes
 num_proj_years <- 10
 
@@ -50,7 +54,7 @@ proj_fleet_age_comp_part <- c(2,2,2,0)
 
 
 
-working_dir <- "\\home\\w\\dev\\SS sims\\run"
+working_dir <- "F:\\Folder\\w\\dev\\SS sims\\run"
 
 
 
@@ -66,8 +70,8 @@ ss_exe_file <- "ss3.exe"
 starter_file <- "starter.ss"
 starter_calc_only_file <- paste(starter_file,".for_proj",sep="")
 forecast_file <- "forecast.ss"
-dat_file <- "DAT.ss"
-ctl_file <- "CTL.ss"
+dat_file <- "2011_sablefish_data.ss"
+ctl_file <- "2011_sablefish_control.ss"
 est_dat_file <- "data.ss_new"
 
 par_file <- "ss3.par"
@@ -183,11 +187,25 @@ system(paste(ss_exe_file,"-nox",sep=" "),intern=FALSE,ignore.stderr=TRUE,wait=TR
 
 setwd(working_dir)
 
+
 # get the results of the base run
 base_rep_struct <- SS_output(base_dir,forecast=TRUE,verbose=FALSE,printstats=FALSE,hidewarn=TRUE,covar=FALSE)
 
+# get sigmaR
+base_sigmaR <- base_rep_struct$parameters[base_rep_struct$parameters$Label=="SR_sigmaR",]$Value
+env_idx_var_frac <- 0.35
+base_var_frac <- 1.0 - env_idx_var_frac
+proj_sigmaR <- base_var_frac * base_sigmaR
+
+
 # get the estimated parameters from the base run
 base_par_struct <- readLines(paste_dir_file(base_dir,par_file))
+
+# get the historical rec dev vector
+rec_dev_line <- 1 + grep("# recdev1:",base_par_struct)
+rec_devs <- as.double(str_split(str_trim(base_par_struct[rec_dev_line])," ")[[1]])
+rec_dev_hist_max <- max(rec_devs)
+
 
 # get the forecasted catch by fleet
 base_catch_proj <- sim_get_forecast_catch_by_fleet(base_dir,dat_struct$Nfleet,dat_struct$nseas,fc_struct$Nforecastyrs)
@@ -434,17 +452,23 @@ do_projections_for_index <- function(index_num=-1)
             env_idx_row <- subset(subset(prev_rep_struct$cpue,Yr==curr_year),Fleet==index_fleet)
             if (dim(env_idx_row)[1] == 1)
             {
-                # replace rec dev for current year with transformed env idx value from REP index matrix
-                calc_q <- env_idx_row$Calc_Q
-                env_idx <- env_idx_row$Obs
-                curr_year_env_rec_dev <- log(env_idx / calc_q)
-
                 # get rec dev string
                 rec_devs <- str_split(str_trim(prev_par_struct[rec_dev_line])," ")
-                
+
                 # omit the value for the current (last) year
                 new_rec_dev_str <- str_c(rec_devs[[1]][1:(length(rec_devs[[1]])-1)],sep="",collapse=" ")
-                
+
+                # replace rec dev for current year with transformed env idx value from REP index matrix
+                # the env index accounts for 35% of the total rec dev ONLY; randomly generate the remaining 65%
+                calc_q <- env_idx_row$Calc_Q
+                env_idx <- env_idx_row$Obs
+                curr_year_env_rec_dev <- ((env_idx_var_frac * log(env_idx / calc_q)) +
+                                          (base_var_frac * rnorm(1,mean=0,sd=proj_sigmaR)))
+                if (curr_year_env_rec_dev > rec_dev_hist_max)
+                {
+                    curr_year_env_rec_dev <- rec_dev_hist_max
+                }
+
                 new_par_struct[rec_dev_line] <- paste(new_rec_dev_str,curr_year_env_rec_dev,"0.0",sep=" ")
             } else {
                 # add " 0.0" to the main rec devs vector as the default
@@ -560,9 +584,17 @@ foreach (i = 1:num_indices,.export=c("index_names",
                                      "base_par_struct",
                                      "base_rep_struct",
                                      "num_proj_fleets",
+                                     "rec_dev_hist_max",
+                                     "env_idx_var_frac",
+                                     "base_var_frac",
+                                     "proj_sigmaR",
                                      "proj_fleet_seas",
                                      "proj_fleet",
                                      "proj_fleet_name",
+                                     "proj_fleet_len_comp_gender",
+                                     "proj_fleet_len_comp_part",
+                                     "proj_fleet_age_comp_gender",
+                                     "proj_fleet_age_comp_part",
                                      "proj_fleet_cpue_std_err",
                                      "proj_fleet_len_comp_N",
                                      "proj_fleet_age_comp_N",
@@ -584,3 +616,4 @@ setwd(working_dir)
 # check output
 # new_run <- SS_output(new_dir,forecast=TRUE,verbose=FALSE,printstats=FALSE,hidewarn=TRUE,covar=FALSE)
 # SS_plots(new_run)
+
