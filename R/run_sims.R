@@ -11,7 +11,7 @@
 installed.local <- library()$results[,"Package"]
 
 # install what is missing
-needed.local <- c("foreach","doParallel","Hmisc","stringr")
+needed.local <- c("devtools","foreach","doParallel","Hmisc","stringr")
 needed.installed <- needed.local %in% installed.local
 needed.remaining <- needed.local[!needed.installed]
 if (length(needed.remaining) > 0)
@@ -70,8 +70,8 @@ ss_exe_file <- "ss3.exe"
 starter_file <- "starter.ss"
 starter_calc_only_file <- paste(starter_file,".for_proj",sep="")
 forecast_file <- "forecast.ss"
-dat_file <- "2011_sablefish_data.ss"
-ctl_file <- "2011_sablefish_control.ss"
+dat_file <- "DAT.ss"
+ctl_file <- "CTL.ss"
 est_dat_file <- "data.ss_new"
 
 par_file <- "ss3.par"
