@@ -54,7 +54,7 @@ proj_fleet_age_comp_part <- c(2,2,2,0)
 
 
 
-working_dir <- "F:\\Folder\\w\\dev\\SS sims\\run"
+working_dir <- "F:/Folder/w/dev/SS sims/run"
 
 
 
@@ -123,7 +123,7 @@ cat(paste("\nNumber of projection years for each index:  ",num_proj_years,"\n\n"
 
 paste_dir_file <- function(paste_dir,paste_filename)
 {
-    return(paste(paste_dir,"\\",paste_filename,sep=""))
+    return(paste(paste_dir,"/",paste_filename,sep=""))
 }
 
 
