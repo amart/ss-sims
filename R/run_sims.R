@@ -11,7 +11,7 @@
 installed.local <- library()$results[,"Package"]
 
 # install what is missing
-needed.local <- c("devtools","foreach","doParallel","Hmisc","stringr")
+needed.local <- c("devtools","foreach","doParallel","Hmisc","stringr","stringi","gdata")
 needed.installed <- needed.local %in% installed.local
 needed.remaining <- needed.local[!needed.installed]
 if (length(needed.remaining) > 0)
@@ -19,6 +19,7 @@ if (length(needed.remaining) > 0)
     install.packages(needed.remaining)
 }
 
+library(gdata)
 
 devtools::install_github("amart/r4ss")
 library(r4ss)
@@ -28,6 +29,8 @@ library(foreach)
 library(doParallel)
 library(Hmisc)
 library(stringr)
+library(stringi)
+library(gdata)
 
 
 # for repeatability in generating the rec devs
@@ -35,7 +38,7 @@ set.seed(-99199,kind="default",normal.kind="default")
 
 
 # NOTE:  these variables are set for testing purposes
-num_proj_years <- 10
+num_proj_years <- 46 # 2015 - 2060
 
 
 index_seas <- 1
@@ -54,7 +57,7 @@ proj_fleet_age_comp_part <- c(2,2,2,0)
 
 
 
-working_dir <- "F:/Folder/w/dev/SS sims/run"
+working_dir <- "E:/dev/SS sims/run"
 
 
 
@@ -62,7 +65,7 @@ working_dir <- "F:/Folder/w/dev/SS sims/run"
 # ~~~~~~~~~~~ variables set for specific simulations ~~~~~~~~~~~
 
 # num of CPUs for projections running in parallel
-num_cpus <- 4
+num_cpus <- 50001
 
 
 ss_exe_file <- "ss3.exe"
@@ -181,7 +184,7 @@ copy_sim_files_into_dir(working_dir,base_dir)
 
 setwd(base_dir)
 
-system(paste(ss_exe_file,"-nox",sep=" "),intern=FALSE,ignore.stderr=TRUE,wait=TRUE,
+system(paste(ss_exe_file,"-nox","-cbs 1000000000",sep=" "),intern=FALSE,ignore.stderr=TRUE,wait=TRUE,
        input=NULL,show.output.on.console=FALSE,minimized=FALSE,invisible=FALSE)
 
 
@@ -282,9 +285,12 @@ for (f in 1:num_proj_fleets)
 # ~~~~~~~~~~~ function to run projections for a specific index number ~~~~~~~~~~~
 do_projections_for_index <- function(index_num=-1)
 {
+    library(gdata)
     library(r4ss)
     library(Hmisc)
     library(stringr)
+    library(stringi)
+    library(gdata)
 
     if (index_num >= 1 && index_num <= num_indices)
     {
@@ -480,7 +486,7 @@ do_projections_for_index <- function(index_num=-1)
 
 
             # run the calculations only run
-            system(paste(ss_exe_file,"-nox","-nohess",sep=" "),intern=FALSE,ignore.stderr=TRUE,wait=TRUE,
+            system(paste(ss_exe_file,"-nox","-nohess","-cbs 1000000000",sep=" "),intern=FALSE,ignore.stderr=TRUE,wait=TRUE,
                    input=NULL,show.output.on.console=FALSE,minimized=FALSE,invisible=FALSE)
 
 
@@ -539,7 +545,7 @@ do_projections_for_index <- function(index_num=-1)
 
 
             # run the main run
-            system(paste(ss_exe_file,"-nox",sep=" "),intern=FALSE,ignore.stderr=TRUE,wait=TRUE,
+            system(paste(ss_exe_file,"-nox","-cbs 1000000000",sep=" "),intern=FALSE,ignore.stderr=TRUE,wait=TRUE,
                    input=NULL,show.output.on.console=FALSE,minimized=FALSE,invisible=FALSE)
 
 
@@ -555,7 +561,11 @@ do_projections_for_index <- function(index_num=-1)
 
 
 
-# set up doParallel for running in parallel
+# set up for running in parallel
+detectCores()
+getDoParName()
+getDoParVersion()
+
 loop_cl <- makeCluster(num_cpus)
 registerDoParallel(loop_cl)
 
